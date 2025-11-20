@@ -1,0 +1,28 @@
+# Render Blueprint - Optional but helpful
+# This file allows you to deploy everything with one click
+
+services:
+  # Web Service
+  - type: web
+    name: streamlined-transfers
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        value: VcgPbIWUBeMozk8jU1FdbkhaNZggCFZaouSKWqZ8cwA=
+      - key: DATABASE_URL
+        fromDatabase:
+          name: streamlined-transfers-db
+          property: connectionString
+
+  # PostgreSQL Database
+  - type: pspg
+    name: streamlined-transfers-db
+    plan: free
+    databaseName: streamlined_transfers
+    user: streamlined_transfers_user
+

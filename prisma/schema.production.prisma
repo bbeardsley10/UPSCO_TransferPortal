@@ -1,0 +1,49 @@
+// Production schema for PostgreSQL
+// This is used when DATABASE_URL points to PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  location  String
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  sentTransfers     Transfer[] @relation("SentTransfers")
+  receivedTransfers Transfer[] @relation("ReceivedTransfers")
+}
+
+model Transfer {
+  id                  Int       @id @default(autoincrement())
+  fromUserId          Int
+  toUserId            Int
+  fromUser            User      @relation("SentTransfers", fields: [fromUserId], references: [id])
+  toUser              User      @relation("ReceivedTransfers", fields: [toUserId], references: [id])
+  pdfFileName         String
+  pdfPath             String
+  transferType        String    @default("send") // "send" or "request"
+  status              String    @default("pending") // pending, acknowledged, in_progress, fulfilled
+  statusUpdatedAt     DateTime?
+  notes               String?
+  receivedAtDestination Boolean @default(false)
+  receivedAtDestinationAt DateTime?
+  enteredIntoSystem   Boolean   @default(false)
+  enteredIntoSystemAt DateTime?
+  archived            Boolean   @default(false)
+  archivedAt          DateTime?
+  viewedByRecipient   Boolean   @default(false)
+  viewedByRecipientAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
