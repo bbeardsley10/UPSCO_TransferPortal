@@ -1,7 +1,6 @@
 // Script to create PostgreSQL migration on first deploy
 // This handles the SQLite to PostgreSQL migration switch
 
-const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -16,32 +15,33 @@ const lockFileContent = fs.existsSync(lockFile)
   : '';
 
 if (lockFileContent.includes('provider = "sqlite"')) {
-  console.log('⚠️  Detected SQLite migrations, creating PostgreSQL migration...');
+  console.log('⚠️  Detected SQLite migrations, updating for PostgreSQL...');
   
-  // Backup old migrations
+  // Simply update the migration_lock.toml file
+  fs.writeFileSync(lockFile, 'provider = "postgresql"\n');
+  console.log('✅ Updated migration lock file to PostgreSQL');
+  
+  // Delete all old SQLite migration directories
   if (fs.existsSync(migrationsDir)) {
-    const backupDir = path.join(process.cwd(), 'prisma', 'migrations.sqlite.backup');
-    if (!fs.existsSync(backupDir)) {
-      fs.renameSync(migrationsDir, backupDir);
-      console.log('📦 Backed up SQLite migrations');
+    const files = fs.readdirSync(migrationsDir);
+    for (const file of files) {
+      const filePath = path.join(migrationsDir, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isDirectory() && file.match(/^\d{14}_/)) {
+        // Delete old migration directories
+        fs.rmSync(filePath, { recursive: true, force: true });
+        console.log(`🗑️  Removed old migration: ${file}`);
+      }
     }
   }
   
-  // Create new migrations directory
-  if (!fs.existsSync(migrationsDir)) {
-    fs.mkdirSync(migrationsDir, { recursive: true });
-  }
-  
-  // Create migration_lock.toml for PostgreSQL
-  fs.writeFileSync(lockFile, 'provider = "postgresql"\n');
-  console.log('✅ Created PostgreSQL migration lock file');
-  
   // Create initial migration SQL from schema
   const initMigrationDir = path.join(migrationsDir, '20250101000000_init_postgresql');
-  fs.mkdirSync(initMigrationDir, { recursive: true });
-  
-  // Create migration SQL
-  const migrationSQL = `-- CreateTable
+  if (!fs.existsSync(initMigrationDir)) {
+    fs.mkdirSync(initMigrationDir, { recursive: true });
+    
+    // Create migration SQL
+    const migrationSQL = `-- CreateTable
 CREATE TABLE "User" (
     "id" SERIAL NOT NULL,
     "username" TEXT NOT NULL,
@@ -88,9 +88,10 @@ ALTER TABLE "Transfer" ADD CONSTRAINT "Transfer_fromUserId_fkey" FOREIGN KEY ("f
 -- AddForeignKey
 ALTER TABLE "Transfer" ADD CONSTRAINT "Transfer_toUserId_fkey" FOREIGN KEY ("toUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 `;
-  
-  fs.writeFileSync(path.join(initMigrationDir, 'migration.sql'), migrationSQL);
-  console.log('✅ Created initial PostgreSQL migration');
+    
+    fs.writeFileSync(path.join(initMigrationDir, 'migration.sql'), migrationSQL);
+    console.log('✅ Created initial PostgreSQL migration');
+  }
 } else {
   console.log('✅ PostgreSQL migrations already set up');
 }
