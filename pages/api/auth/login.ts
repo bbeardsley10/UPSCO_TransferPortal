@@ -29,34 +29,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid password format' })
   }
 
-  const user = await getUserByUsername(username)
-  if (!user) {
-    // Don't reveal if user exists (security best practice)
-    // Use same delay to prevent timing attacks
-    await new Promise(resolve => setTimeout(resolve, 100))
-    return res.status(401).json({ error: 'Invalid credentials' })
-  }
+  try {
+    const user = await getUserByUsername(username)
+    if (!user) {
+      // Don't reveal if user exists (security best practice)
+      // Use same delay to prevent timing attacks
+      await new Promise(resolve => setTimeout(resolve, 100))
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
-  const isValid = await verifyPassword(password, user.password)
-  if (!isValid) {
-    return res.status(401).json({ error: 'Invalid credentials' })
-  }
+    const isValid = await verifyPassword(password, user.password)
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
-  setSession(req, res, {
-    id: user.id,
-    username: user.username,
-    location: user.location,
-    isAdmin: user.isAdmin || false,
-  })
-
-  res.json({ 
-    success: true, 
-    user: { 
-      id: user.id, 
-      username: user.username, 
+    setSession(req, res, {
+      id: user.id,
+      username: user.username,
       location: user.location,
       isAdmin: user.isAdmin || false,
-    } 
-  })
+    })
+
+    res.json({ 
+      success: true, 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        location: user.location,
+        isAdmin: user.isAdmin || false,
+      } 
+    })
+  } catch (error: any) {
+    console.error('Login error:', error)
+    // Check if it's a database connection error
+    if (error?.code === 'P1001' || error?.message?.includes('connect') || error?.message?.includes('database')) {
+      return res.status(500).json({ 
+        error: 'Database connection error. Please ensure the database is set up and migrations have been run.' 
+      })
+    }
+    // Check if tables don't exist
+    if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
+      return res.status(500).json({ 
+        error: 'Database tables not found. Please run migrations: npx prisma migrate deploy' 
+      })
+    }
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 }
 
