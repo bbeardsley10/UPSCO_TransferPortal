@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Script to prepare the application for deployment
 # This helps switch between SQLite (local) and PostgreSQL (production)
@@ -11,8 +11,8 @@ if [ -f "prisma/schema.prisma" ]; then
     cp prisma/schema.prisma prisma/schema.backup.prisma
 fi
 
-# Check if DATABASE_URL is set and contains postgresql
-if [[ -n "$DATABASE_URL" ]] && ([[ "$DATABASE_URL" == *"postgresql"* ]] || [[ "$DATABASE_URL" == *"postgres"* ]]); then
+# Check if DATABASE_URL is set and contains postgresql (using sh-compatible syntax)
+if [ -n "$DATABASE_URL" ] && (echo "$DATABASE_URL" | grep -q "postgresql\|postgres"); then
     echo "📦 Detected PostgreSQL database - using production schema"
     cp prisma/schema.production.prisma prisma/schema.prisma
     echo "✅ Schema updated for PostgreSQL"
