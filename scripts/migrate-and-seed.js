@@ -7,6 +7,18 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function setupDatabase() {
+  // First, set up PostgreSQL migrations if needed
+  console.log('🔄 Setting up PostgreSQL migrations...');
+  try {
+    execSync('node scripts/create-postgres-migration.js', {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+    });
+  } catch (error) {
+    console.error('⚠️  Migration setup warning:', error.message);
+    // Continue anyway
+  }
+
   console.log('🔄 Running database migrations...');
   
   try {
