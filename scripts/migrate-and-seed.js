@@ -48,15 +48,11 @@ async function setupDatabase() {
   console.log('✅ Database setup complete');
 }
 
-// Run setup and then start the server
+// Run setup
 setupDatabase()
   .then(() => {
-    console.log('🚀 Starting Next.js server...');
-    // Start Next.js
-    execSync('next start', {
-      stdio: 'inherit',
-      cwd: process.cwd(),
-    });
+    console.log('✅ Database setup complete, ready to start server');
+    process.exit(0);
   })
   .catch((error) => {
     console.error('❌ Setup failed:', error);
