@@ -47,7 +47,8 @@ export default function AdminDashboard({ user, setUser }: any) {
       return
     }
     fetchTransfers()
-    const interval = setInterval(fetchTransfers, 5000)
+    // Poll every 30 seconds instead of 5 seconds to reduce database load
+    const interval = setInterval(fetchTransfers, 30000) // Poll every 30 seconds
     return () => clearInterval(interval)
   }, [user, archiveFilter])
 

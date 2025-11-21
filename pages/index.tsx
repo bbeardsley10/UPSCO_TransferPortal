@@ -43,19 +43,30 @@ export default function Dashboard({ user, setUser }: any) {
       return
     }
     fetchTransfers()
-    const interval = setInterval(fetchTransfers, 5000) // Poll every 5 seconds
+    // Poll every 30 seconds instead of 5 seconds to reduce database load
+    const interval = setInterval(fetchTransfers, 30000) // Poll every 30 seconds
     return () => clearInterval(interval)
   }, [user, filter, archiveFilter])
 
   // Refresh transfers when returning to the page (e.g., from transfer detail page)
+  // Only refresh if tab is visible to avoid unnecessary API calls
   useEffect(() => {
     const handleFocus = () => {
-      if (user && !user.isAdmin) {
+      if (user && !user.isAdmin && document.visibilityState === 'visible') {
+        fetchTransfers()
+      }
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user && !user.isAdmin) {
         fetchTransfers()
       }
     }
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [user])
 
   const fetchTransfers = async () => {
