@@ -20,19 +20,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid file path' })
   }
   
+  // Decode URL-encoded path segments
+  const decodedSegments = filePath.map(segment => decodeURIComponent(segment))
+  
   // Security: Prevent path traversal attacks
   // Filter out any dangerous path segments
-  const safeSegments = filePath.filter(segment => {
+  const safeSegments = decodedSegments.filter(segment => {
     if (!segment) return false
     // Remove any segments with path traversal attempts
     if (segment.includes('..') || segment.includes('\\') || path.isAbsolute(segment)) {
       return false
     }
-    // Only allow alphanumeric, dots, dashes, and underscores in filenames
+    // Allow alphanumeric, dots, dashes, and underscores in filenames
+    // Note: We decode first, then validate, so spaces and other chars are handled
     return /^[a-zA-Z0-9._-]+$/.test(segment)
   })
   
-  if (safeSegments.length !== filePath.length) {
+  if (safeSegments.length !== decodedSegments.length) {
+    console.log('[Uploads API] Invalid path segments detected:', {
+      original: filePath,
+      decoded: decodedSegments,
+      safe: safeSegments,
+    })
     return res.status(403).json({ error: 'Invalid file path' })
   }
   
@@ -61,7 +70,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Database stores paths like: /uploads/filename.pdf
     const relativePath = `/uploads/${normalizedPath}`
     
-    console.log('[Uploads API] Requested path:', normalizedPath)
+    console.log('[Uploads API] Requested path segments:', filePath)
+    console.log('[Uploads API] Decoded segments:', decodedSegments)
+    console.log('[Uploads API] Normalized path:', normalizedPath)
     console.log('[Uploads API] Looking for pdfPath:', relativePath)
     console.log('[Uploads API] User ID:', user.id, 'isAdmin:', isAdmin)
     

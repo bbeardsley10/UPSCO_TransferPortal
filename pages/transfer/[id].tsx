@@ -287,34 +287,42 @@ export default function TransferDetail({ user, setUser }: any) {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">PDF Document</label>
-                {transfer.pdfPath && (
-                  <>
-                    <div className="border-2 border-gray-200 rounded-xl overflow-hidden shadow-lg">
-                      <iframe
-                        src={`/api/uploads${transfer.pdfPath.replace('/uploads/', '/')}`}
-                        className="w-full h-[400px] sm:h-[500px] lg:h-[600px]"
-                        title="Transfer PDF"
-                      />
-                    </div>
-                    <div className="mt-4 flex space-x-4">
-                      <a
-                        href={`/api/uploads${transfer.pdfPath.replace('/uploads/', '/')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium text-sm border border-blue-200 shadow-sm hover:shadow-md"
-                      >
-                        Open in new tab
-                      </a>
-                      <a
-                        href={`/api/uploads${transfer.pdfPath.replace('/uploads/', '/')}`}
-                        download={transfer.pdfFileName}
-                        className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors duration-200 font-medium text-sm border border-indigo-200 shadow-sm hover:shadow-md"
-                      >
-                        Download PDF
-                      </a>
-                    </div>
-                  </>
-                )}
+                {transfer.pdfPath && (() => {
+                  // Extract filename from pdfPath (e.g., /uploads/filename.pdf -> filename.pdf)
+                  const filename = transfer.pdfPath.replace(/^\/uploads\//, '')
+                  // Properly encode the filename for URL
+                  const encodedFilename = encodeURIComponent(filename)
+                  const pdfUrl = `/api/uploads/${encodedFilename}`
+                  
+                  return (
+                    <>
+                      <div className="border-2 border-gray-200 rounded-xl overflow-hidden shadow-lg">
+                        <iframe
+                          src={pdfUrl}
+                          className="w-full h-[400px] sm:h-[500px] lg:h-[600px]"
+                          title="Transfer PDF"
+                        />
+                      </div>
+                      <div className="mt-4 flex space-x-4">
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium text-sm border border-blue-200 shadow-sm hover:shadow-md"
+                        >
+                          Open in new tab
+                        </a>
+                        <a
+                          href={pdfUrl}
+                          download={transfer.pdfFileName}
+                          className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors duration-200 font-medium text-sm border border-indigo-200 shadow-sm hover:shadow-md"
+                        >
+                          Download PDF
+                        </a>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
 
               {(canUpdate || canUpdateFulfillment) && (
