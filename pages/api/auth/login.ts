@@ -32,16 +32,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const user = await getUserByUsername(username)
     if (!user) {
+      console.log(`[Login] User not found: ${username}`)
       // Don't reveal if user exists (security best practice)
       // Use same delay to prevent timing attacks
       await new Promise(resolve => setTimeout(resolve, 100))
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
+    console.log(`[Login] User found: ${username}, checking password...`)
     const isValid = await verifyPassword(password, user.password)
     if (!isValid) {
+      console.log(`[Login] Invalid password for user: ${username}`)
       return res.status(401).json({ error: 'Invalid credentials' })
     }
+
+    console.log(`[Login] Successful login for user: ${username}`)
 
     setSession(req, res, {
       id: user.id,
