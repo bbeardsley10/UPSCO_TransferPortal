@@ -50,7 +50,7 @@ export default function Login({ user, setUser }: any) {
             />
           </div>
           <h2 className="text-center text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 mb-2">
-            Streamlined Transfers
+            UPSCO Transfers
           </h2>
           <p className="mt-2 text-center text-sm sm:text-base font-medium text-gray-600">
             Sign in to your account
