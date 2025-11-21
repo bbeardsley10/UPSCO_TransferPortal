@@ -2,6 +2,7 @@ import '@/styles/globals.css'
 import type { AppProps } from 'next/app'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import Head from 'next/head'
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter()
@@ -49,6 +50,16 @@ export default function App({ Component, pageProps }: AppProps) {
     )
   }
 
-  return <Component {...pageProps} user={user} setUser={setUser} />
+  return (
+    <>
+      <Head>
+        <link rel="icon" href="/logo.jpg" type="image/jpeg" />
+        <link rel="shortcut icon" href="/logo.jpg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/logo.jpg" />
+        <title>Streamlined Transfers</title>
+      </Head>
+      <Component {...pageProps} user={user} setUser={setUser} />
+    </>
+  )
 }
 
