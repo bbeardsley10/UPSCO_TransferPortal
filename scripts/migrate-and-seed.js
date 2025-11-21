@@ -123,23 +123,14 @@ async function setupDatabase() {
     
     if (userCount === 0) {
       console.log('No users found, seeding database...');
-      try {
-        execSync('npm run seed', {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-          env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
-        });
-        console.log('✅ Database seeded successfully');
-        
-        // Verify seeding worked
-        const newUserCount = await prisma.user.count();
-        console.log(`✅ Verified: ${newUserCount} users now in database`);
-      } catch (seedError) {
-        console.error('❌ Seeding failed:', seedError.message);
-        console.error('Full error:', seedError);
-        // Try manual seeding as fallback
-        console.log('🔄 Attempting manual seed...');
-        await manualSeed();
+      // Use manual seed directly (more reliable than npm run seed)
+      await manualSeed();
+      
+      // Verify seeding worked
+      const newUserCount = await prisma.user.count();
+      console.log(`✅ Verified: ${newUserCount} users now in database`);
+      if (newUserCount === 0) {
+        console.error('❌ Seeding completed but no users found - there may be an issue');
       }
     } else {
       console.log(`✅ Database already has ${userCount} users, skipping seed`);
@@ -151,8 +142,11 @@ async function setupDatabase() {
     try {
       console.log('🔄 Attempting manual seed as fallback...');
       await manualSeed();
+      const userCount = await prisma.user.count();
+      console.log(`✅ Manual seed completed. Users in database: ${userCount}`);
     } catch (manualError) {
       console.error('❌ Manual seed also failed:', manualError.message);
+      console.error('Full error:', manualError);
     }
   } finally {
     await prisma.$disconnect();

@@ -350,16 +350,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      // Delete the PDF file from filesystem
-      const fs = await import('fs/promises')
-      const path = await import('path')
-      const filePath = path.join(process.cwd(), 'uploads', path.basename(transfer.pdfPath))
-      
-      try {
-        await fs.unlink(filePath)
-      } catch (fileError: any) {
-        // File might not exist, log but don't fail
-        console.warn('Could not delete file:', fileError.message)
+      // Delete the PDF file from S3 or filesystem
+      if (transfer.pdfPath.startsWith('s3://')) {
+        // Delete from S3
+        const { deleteFromS3, isS3Configured } = await import('@/lib/s3')
+        if (isS3Configured()) {
+          try {
+            const s3Key = transfer.pdfPath.replace('s3://', '')
+            await deleteFromS3(s3Key)
+            console.log('[Delete] File deleted from S3:', s3Key)
+          } catch (s3Error: any) {
+            // Log but don't fail - file might not exist
+            console.warn('Could not delete file from S3:', s3Error.message)
+          }
+        }
+      } else {
+        // Delete from local filesystem
+        const fs = await import('fs/promises')
+        const path = await import('path')
+        const filePath = path.join(process.cwd(), 'uploads', path.basename(transfer.pdfPath))
+        
+        try {
+          await fs.unlink(filePath)
+        } catch (fileError: any) {
+          // File might not exist, log but don't fail
+          console.warn('Could not delete file:', fileError.message)
+        }
       }
 
       // Delete the transfer record

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rateLimit } from '@/lib/security'
+import { isS3Configured, uploadToS3 } from '@/lib/s3'
 import formidable from 'formidable'
 import fs from 'fs/promises'
 import path from 'path'
@@ -130,17 +131,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Ensure extension is .pdf
     const safeExt = ext === '.pdf' ? '.pdf' : '.pdf'
     const fileName = `transfer_${timestamp}_${Math.random().toString(36).substring(7)}${safeExt}`
-    const filePath = path.join(uploadsDir, fileName)
     
-    // Security: Double-check the final path is within uploads directory
-    const resolvedPath = path.resolve(filePath)
-    if (!resolvedPath.startsWith(path.resolve(uploadsDir))) {
-      await fs.unlink(file.filepath)
-      return res.status(400).json({ error: 'Invalid file path' })
+    // Read file buffer for validation and upload
+    const fileBuffer = await fs.readFile(file.filepath)
+    
+    let pdfPath: string
+    
+    // Upload to S3 if configured, otherwise use local filesystem
+    if (isS3Configured()) {
+      try {
+        // Upload to S3
+        const s3Key = await uploadToS3(fileBuffer, fileName, 'application/pdf')
+        pdfPath = `s3://${s3Key}` // Store S3 key with s3:// prefix for identification
+        console.log('[Upload] File uploaded to S3:', s3Key)
+      } catch (s3Error: any) {
+        console.error('[Upload] S3 upload failed, falling back to local storage:', s3Error)
+        // Fall back to local storage if S3 fails
+        const filePath = path.join(uploadsDir, fileName)
+        const resolvedPath = path.resolve(filePath)
+        if (!resolvedPath.startsWith(path.resolve(uploadsDir))) {
+          await fs.unlink(file.filepath)
+          return res.status(400).json({ error: 'Invalid file path' })
+        }
+        await fs.writeFile(filePath, fileBuffer)
+        pdfPath = `/uploads/${fileName}`
+      }
+    } else {
+      // Use local filesystem
+      const filePath = path.join(uploadsDir, fileName)
+      const resolvedPath = path.resolve(filePath)
+      if (!resolvedPath.startsWith(path.resolve(uploadsDir))) {
+        await fs.unlink(file.filepath)
+        return res.status(400).json({ error: 'Invalid file path' })
+      }
+      await fs.writeFile(filePath, fileBuffer)
+      pdfPath = `/uploads/${fileName}`
     }
-
-    // Move file to uploads directory
-    await fs.rename(file.filepath, filePath)
+    
+    // Clean up temporary file
+    try {
+      await fs.unlink(file.filepath)
+    } catch {}
 
     // Create transfer record
     const transfer = await prisma.transfer.create({
@@ -148,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         fromUserId: fromUserId,
         toUserId: toUserId,
         pdfFileName: originalName,
-        pdfPath: `/uploads/${fileName}`,
+        pdfPath: pdfPath,
         transferType: transferType,
         status: 'pending',
         statusUpdatedAt: new Date(), // Set initial timestamp when created

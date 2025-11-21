@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isS3Configured, getFileFromS3, getS3SignedUrl } from '@/lib/s3'
 import fs from 'fs'
 import path from 'path'
 
@@ -77,56 +78,80 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[Uploads API] User ID:', user.id, 'isAdmin:', isAdmin)
     
     // Admins can access any transfer, regular users can only access their own
-    const whereClause: any = {
-      pdfPath: relativePath,
-    }
+    const baseWhereClause: any = {}
     
     if (!isAdmin) {
-      whereClause.OR = [
+      baseWhereClause.OR = [
         { fromUserId: user.id },
         { toUserId: user.id },
       ]
     }
 
-    const transfer = await prisma.transfer.findFirst({
-      where: whereClause,
+    // Try to find transfer by exact path match first
+    let transfer = await prisma.transfer.findFirst({
+      where: {
+        ...baseWhereClause,
+        pdfPath: relativePath,
+      },
     })
+    
+    // If not found, try to find by filename (for S3 paths or different path formats)
+    if (!transfer) {
+      const filename = normalizedPath
+      transfer = await prisma.transfer.findFirst({
+        where: {
+          ...baseWhereClause,
+          OR: [
+            { pdfPath: { contains: filename } },
+            { pdfPath: { endsWith: filename } },
+          ],
+        },
+      })
+    }
 
     if (!transfer) {
-      console.log('[Uploads API] Transfer not found. Searched for:', JSON.stringify(whereClause))
-      // Try to find any transfer with this file to help debug
-      const anyTransfer = await prisma.transfer.findFirst({
-        where: { pdfPath: relativePath },
-      })
-      if (anyTransfer) {
-        console.log('[Uploads API] Found transfer but access denied:', {
-          transferId: anyTransfer.id,
-          fromUserId: anyTransfer.fromUserId,
-          toUserId: anyTransfer.toUserId,
-          requestingUserId: user.id,
-        })
-      }
+      console.log('[Uploads API] Transfer not found. Searched for filename:', normalizedPath)
       return res.status(403).json({ error: 'Access denied' })
     }
     
-    console.log('[Uploads API] Transfer found, access granted:', transfer.id)
+    console.log('[Uploads API] Transfer found, access granted:', transfer.id, 'pdfPath:', transfer.pdfPath)
 
-    if (!fs.existsSync(fullPath)) {
-      return res.status(404).json({ error: 'File not found' })
-    }
-
-    // Security: Verify file is actually a PDF by checking MIME type
-    const fileBuffer = fs.readFileSync(fullPath)
-    const fileSignature = fileBuffer.slice(0, 4).toString('hex')
-    // PDF files start with %PDF (hex: 255044462D)
-    if (fileSignature !== '25504446' && !fileBuffer.toString('ascii', 0, 4).startsWith('%PDF')) {
-      return res.status(400).json({ error: 'Invalid file type' })
-    }
-    const ext = path.extname(fullPath).toLowerCase()
-    
+    let fileBuffer: Buffer
     let contentType = 'application/pdf'
-    if (ext === '.pdf') {
-      contentType = 'application/pdf'
+
+    // Check if file is stored in S3
+    if (transfer.pdfPath.startsWith('s3://')) {
+      if (!isS3Configured()) {
+        return res.status(500).json({ error: 'S3 is not configured but file is stored in S3' })
+      }
+      
+      try {
+        // Extract S3 key from pdfPath (s3://transfers/filename.pdf -> transfers/filename.pdf)
+        const s3Key = transfer.pdfPath.replace('s3://', '')
+        fileBuffer = await getFileFromS3(s3Key)
+        
+        // Verify it's a PDF
+        const fileSignature = fileBuffer.slice(0, 4).toString('hex')
+        if (fileSignature !== '25504446' && !fileBuffer.toString('ascii', 0, 4).startsWith('%PDF')) {
+          return res.status(400).json({ error: 'Invalid file type' })
+        }
+      } catch (s3Error: any) {
+        console.error('[Uploads API] Error fetching from S3:', s3Error)
+        return res.status(404).json({ error: 'File not found in S3' })
+      }
+    } else {
+      // Local filesystem
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ error: 'File not found' })
+      }
+
+      fileBuffer = fs.readFileSync(fullPath)
+      
+      // Security: Verify file is actually a PDF by checking MIME type
+      const fileSignature = fileBuffer.slice(0, 4).toString('hex')
+      if (fileSignature !== '25504446' && !fileBuffer.toString('ascii', 0, 4).startsWith('%PDF')) {
+        return res.status(400).json({ error: 'Invalid file type' })
+      }
     }
 
     // Set headers for PDF display in browser/iframe

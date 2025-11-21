@@ -288,8 +288,16 @@ export default function TransferDetail({ user, setUser }: any) {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">PDF Document</label>
                 {transfer.pdfPath && (() => {
-                  // Extract filename from pdfPath (e.g., /uploads/filename.pdf -> filename.pdf)
-                  const filename = transfer.pdfPath.replace(/^\/uploads\//, '')
+                  // Extract filename from pdfPath
+                  // Could be: /uploads/filename.pdf or s3://transfers/filename.pdf
+                  let filename: string
+                  if (transfer.pdfPath.startsWith('s3://')) {
+                    // Extract from S3 path: s3://transfers/filename.pdf -> filename.pdf
+                    filename = transfer.pdfPath.split('/').pop() || ''
+                  } else {
+                    // Extract from local path: /uploads/filename.pdf -> filename.pdf
+                    filename = transfer.pdfPath.replace(/^\/uploads\//, '')
+                  }
                   // Properly encode the filename for URL
                   const encodedFilename = encodeURIComponent(filename)
                   const pdfUrl = `/api/uploads/${encodedFilename}`
