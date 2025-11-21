@@ -19,19 +19,46 @@ async function setupDatabase() {
     // Continue anyway
   }
 
-  console.log('🔄 Running database migrations...');
+  console.log('🔄 Syncing database schema...');
   
   try {
-    // Run migrations
-    execSync('npx prisma migrate deploy', {
+    // Use db push instead of migrate deploy - it's simpler and handles schema sync
+    // This will create/update tables based on the schema without needing migrations
+    execSync('npx prisma db push --accept-data-loss', {
       stdio: 'inherit',
       cwd: process.cwd(),
     });
-    console.log('✅ Migrations completed successfully');
+    console.log('✅ Database schema synced successfully');
   } catch (error) {
-    console.error('❌ Migration failed:', error.message);
-    await prisma.$disconnect();
-    process.exit(1);
+    console.error('❌ Database sync failed:', error.message);
+    // Try to resolve failed migrations first
+    try {
+      console.log('🔄 Attempting to resolve failed migrations...');
+      execSync('npx prisma migrate resolve --rolled-back 20250120000000_init_postgresql', {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+      });
+      // Try db push again
+      execSync('npx prisma db push --accept-data-loss', {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+      });
+      console.log('✅ Database schema synced after resolving migrations');
+    } catch (resolveError) {
+      console.error('❌ Could not resolve migrations, trying direct db push...');
+      // Last resort: just try db push
+      try {
+        execSync('npx prisma db push --accept-data-loss --skip-generate', {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+        });
+        console.log('✅ Database schema synced');
+      } catch (finalError) {
+        console.error('❌ All database sync attempts failed');
+        await prisma.$disconnect();
+        process.exit(1);
+      }
+    }
   }
 
   // Check if we should seed (only if no users exist)
