@@ -77,17 +77,21 @@ export function setSession(req: NextApiRequest, res: NextApiResponse, user: Sess
   const encodedSession = encodeURIComponent(signedSession)
   
   // Set secure cookie flags
-  const isProduction = process.env.NODE_ENV === 'production'
+  // On Render, we're always behind HTTPS, so use Secure flag
+  // Use Lax instead of Strict to allow cookies to work with redirects and cross-site navigation
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+  const isHttps = isProduction || req.headers['x-forwarded-proto'] === 'https'
+  
   const cookieOptions = [
     `session=${encodedSession}`,
     'Path=/',
     'HttpOnly',
-    `SameSite=${isProduction ? 'Strict' : 'Lax'}`,
+    'SameSite=Lax', // Use Lax for better compatibility with redirects
     'Max-Age=86400', // 24 hours
   ]
   
-  if (isProduction) {
-    cookieOptions.push('Secure') // Only send over HTTPS in production
+  if (isHttps) {
+    cookieOptions.push('Secure') // Send over HTTPS
   }
   
   res.setHeader('Set-Cookie', cookieOptions.join('; '))
@@ -128,7 +132,11 @@ export function getSession(req: NextApiRequest): SessionUser | null {
   }
 }
 
-export function clearSession(res: NextApiResponse) {
-  res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0')
+export function clearSession(res: NextApiResponse, req?: NextApiRequest) {
+  const isHttps = process.env.NODE_ENV === 'production' || 
+                  process.env.RENDER === 'true' || 
+                  (req && req.headers['x-forwarded-proto'] === 'https')
+  const secureFlag = isHttps ? '; Secure' : ''
+  res.setHeader('Set-Cookie', `session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`)
 }
 
