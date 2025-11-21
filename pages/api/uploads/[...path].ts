@@ -16,12 +16,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const filePath = req.query.path as string[]
   
+  if (!filePath || !Array.isArray(filePath) || filePath.length === 0) {
+    return res.status(400).json({ error: 'Invalid file path' })
+  }
+  
   // Security: Prevent path traversal attacks
-  // Normalize and validate the path to ensure it stays within uploads directory
-  const normalizedPath = filePath
-    .map(segment => path.normalize(segment))
-    .filter(segment => segment && !segment.includes('..') && !path.isAbsolute(segment))
-    .join(path.sep)
+  // Filter out any dangerous path segments
+  const safeSegments = filePath.filter(segment => {
+    if (!segment) return false
+    // Remove any segments with path traversal attempts
+    if (segment.includes('..') || segment.includes('\\') || path.isAbsolute(segment)) {
+      return false
+    }
+    // Only allow alphanumeric, dots, dashes, and underscores in filenames
+    return /^[a-zA-Z0-9._-]+$/.test(segment)
+  })
+  
+  if (safeSegments.length !== filePath.length) {
+    return res.status(403).json({ error: 'Invalid file path' })
+  }
+  
+  // Use forward slashes consistently (works on both Unix and Windows)
+  const normalizedPath = safeSegments.join('/')
   
   // Double-check: ensure the resolved path is within uploads directory
   const uploadsDir = path.join(process.cwd(), 'uploads')
@@ -41,7 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
     const isAdmin = dbUser?.isAdmin || false
 
-    const relativePath = `/uploads/${normalizedPath.replace(/\\/g, '/')}`
+    // Construct the relative path that matches what's stored in the database
+    // Database stores paths like: /uploads/filename.pdf
+    const relativePath = `/uploads/${normalizedPath}`
+    
+    console.log('[Uploads API] Requested path:', normalizedPath)
+    console.log('[Uploads API] Looking for pdfPath:', relativePath)
+    console.log('[Uploads API] User ID:', user.id, 'isAdmin:', isAdmin)
     
     // Admins can access any transfer, regular users can only access their own
     const whereClause: any = {
@@ -60,8 +82,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     if (!transfer) {
+      console.log('[Uploads API] Transfer not found. Searched for:', JSON.stringify(whereClause))
+      // Try to find any transfer with this file to help debug
+      const anyTransfer = await prisma.transfer.findFirst({
+        where: { pdfPath: relativePath },
+      })
+      if (anyTransfer) {
+        console.log('[Uploads API] Found transfer but access denied:', {
+          transferId: anyTransfer.id,
+          fromUserId: anyTransfer.fromUserId,
+          toUserId: anyTransfer.toUserId,
+          requestingUserId: user.id,
+        })
+      }
       return res.status(403).json({ error: 'Access denied' })
     }
+    
+    console.log('[Uploads API] Transfer found, access granted:', transfer.id)
 
     if (!fs.existsSync(fullPath)) {
       return res.status(404).json({ error: 'File not found' })
