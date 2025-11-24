@@ -515,13 +515,13 @@ export default function TransferDetail({ user, setUser }: any) {
                         <div className="flex items-center">
                           {transfer.enteredIntoSystem ? (
                             <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 text-sm font-medium border border-blue-200 shadow-sm">
-                              ✓ Entered into system (Prophet 21)
+                              ✓ Received in system (Prophet 21)
                               {transfer.enteredIntoSystemAt && (
                                 <span className="ml-2 text-xs">({formatDate(transfer.enteredIntoSystemAt)})</span>
                               )}
                             </span>
                           ) : (
-                            <span className="text-sm text-gray-600 font-medium">Not yet entered into system</span>
+                            <span className="text-sm text-gray-600 font-medium">Not yet recevied in system</span>
                           )}
                         </div>
                       </div>
